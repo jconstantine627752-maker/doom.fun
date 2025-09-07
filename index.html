@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DOOM (from GitHub assets)</title>
+  <title>Chocolate DOOM (DevFun client)</title>
   <style>
     html,body{margin:0;height:100%;background:#0b0b0b;color:#e7e7e7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
     header{padding:14px 18px;border-bottom:1px solid #222;display:flex;gap:10px;align-items:center}
@@ -34,16 +34,11 @@
   </main>
 
   <script>
-    // === your repo details ===
-    const USER   = "jconstantine627752-maker";
-    const REPO   = "doom.fun";
-    const BRANCH = "main";
-
-    // Serve files from GitHub via jsDelivr CDN (no Pages needed)
-    const CDN = `https://cdn.jsdelivr.net/gh/${USER}/${REPO}@${BRANCH}/`;
-    const JS_URL   = CDN + "chocolate-doom.js";
-    const WASM_URL = CDN + "chocolate-doom.wasm";
-    const WAD_URL  = CDN + "doom1.wad";
+    // === your hosted asset URLs on GitHub Pages ===
+    const BASE   = "https://jconstantine627752-maker.github.io/doom.fun/";
+    const JS_URL = BASE + "chocolate-doom.js";
+    const WASM_URL = BASE + "chocolate-doom.wasm";
+    const WAD_URL  = BASE + "doom1.wad";
 
     const statusEl = document.getElementById("status");
     const logEl = document.getElementById("log");
@@ -54,23 +49,27 @@
     async function start() {
       try {
         setStatus("Loading engine…");
+        // Load the Emscripten glue JS from GitHub Pages
         await new Promise((resolve, reject) => {
           const s = document.createElement("script");
           s.src = JS_URL; s.async = true;
-          s.onload = resolve; s.onerror = () => reject(new Error("Failed to load chocolate-doom.js"));
+          s.onload = resolve;
+          s.onerror = () => reject(new Error("Failed to load chocolate-doom.js"));
           document.head.appendChild(s);
         });
 
-        // Configure Emscripten to fetch assets via URLs (no base64)
+        // Configure Emscripten Module to fetch assets via URLs (no base64)
         window.Module = {
           print: (t)=>log(t),
           printErr: (t)=>log("[err] " + t),
           canvas,
           setStatus,
           preRun: [ () => {
+            // Let Emscripten fetch doom1.wad by URL and mount it at /doom1.wad
             FS.createPreloadedFile("/", "doom1.wad", WAD_URL, true, true);
           }],
           arguments: ["-iwad","doom1.wad"],
+          // When the glue looks for the .wasm file, point it to your hosted URL
           locateFile: (path) => path.endsWith(".wasm") ? WASM_URL : path
         };
 
@@ -81,7 +80,7 @@
         setStatus("Running");
       } catch (err) {
         console.error(err);
-        setStatus("Error: " + (err.message || err));
+        setStatus("Error: " + (err && err.message ? err.message : err));
         log(String(err.stack || err));
       }
     }
