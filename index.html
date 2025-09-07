@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DOOM (from GitHub assets)</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0b0b0b;color:#e7e7e7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+    header{padding:14px 18px;border-bottom:1px solid #222;display:flex;gap:10px;align-items:center}
+    h1{font-size:18px;margin:0} #status{font-size:12px;color:#9aa0a6}
+    main{padding:16px}
+    canvas{display:block;margin:0 auto;width:min(96vw,1024px);aspect-ratio:4/3;background:#000;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.55);outline:none}
+    .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+    button{padding:10px 14px;border-radius:999px;border:1px solid #333;background:#161616;color:#e7e7e7;font-weight:600;cursor:pointer}
+    button:hover{background:#1f1f1f}
+    a.small{color:#9aa0a6;font-size:12px;text-decoration:none}
+    pre{white-space:pre-wrap;background:#111;padding:10px;border-radius:8px;color:#9aa0a6;max-width:960px;margin:12px auto}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chocolate DOOM</h1>
+    <span id="status" aria-live="polite">Ready</span>
+  </header>
+
+  <main>
+    <canvas id="canvas" tabindex="0"></canvas>
+    <div class="controls">
+      <button id="startBtn">Start</button>
+      <button id="fullscreenBtn">Fullscreen</button>
+      <a class="small">Click canvas → <kbd>WASD</kbd> + mouse. <kbd>Esc</kbd> unlocks pointer.</a>
+    </div>
+    <pre id="log" hidden></pre>
+  </main>
+
+  <script>
+    // === your repo details ===
+    const USER   = "jconstantine627752-maker";
+    const REPO   = "doom.fun";
+    const BRANCH = "main";
+
+    // Serve files from GitHub via jsDelivr CDN (no Pages needed)
+    const CDN = `https://cdn.jsdelivr.net/gh/${USER}/${REPO}@${BRANCH}/`;
+    const JS_URL   = CDN + "chocolate-doom.js";
+    const WASM_URL = CDN + "chocolate-doom.wasm";
+    const WAD_URL  = CDN + "doom1.wad";
+
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+    const canvas = document.getElementById("canvas");
+    const setStatus = (m)=>statusEl.textContent = m;
+    const log = (m)=>{ console.log(m); logEl.hidden=false; logEl.textContent += m + "\n"; };
+
+    async function start() {
+      try {
+        setStatus("Loading engine…");
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = JS_URL; s.async = true;
+          s.onload = resolve; s.onerror = () => reject(new Error("Failed to load chocolate-doom.js"));
+          document.head.appendChild(s);
+        });
+
+        // Configure Emscripten to fetch assets via URLs (no base64)
+        window.Module = {
+          print: (t)=>log(t),
+          printErr: (t)=>log("[err] " + t),
+          canvas,
+          setStatus,
+          preRun: [ () => {
+            FS.createPreloadedFile("/", "doom1.wad", WAD_URL, true, true);
+          }],
+          arguments: ["-iwad","doom1.wad"],
+          locateFile: (path) => path.endsWith(".wasm") ? WASM_URL : path
+        };
+
+        setStatus("Starting DOOM…");
+        if (typeof createModule !== "function") throw new Error("createModule() not found");
+        await createModule(Module);
+        setTimeout(()=>canvas.focus(), 0);
+        setStatus("Running");
+      } catch (err) {
+        console.error(err);
+        setStatus("Error: " + (err.message || err));
+        log(String(err.stack || err));
+      }
+    }
+
+    document.getElementById("startBtn").onclick = start;
+    document.getElementById("fullscreenBtn").onclick = () => canvas.requestFullscreen?.();
+  </script>
+</body>
+</html>
