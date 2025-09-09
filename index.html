@@ -6,15 +6,16 @@
   <title>DOOM.fun</title>
   <style>
     html,body{margin:0;height:100%;background:#0b0b0b;color:#e7e7e7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
-    header{padding:14px 18px;border-bottom:1px solid #222;display:flex;gap:10px;align-items:center}
-    h1{font-size:18px;margin:0} #status{font-size:12px;color:#9aa0a6}
-    main{padding:16px}
+    header{padding:14px 18px;border-bottom:1px solid #222;display:flex;gap:10px;align-items:center;justify-content:space-between;background:#0d0d0d}
+    h1{font-size:18px;margin:0}
+    #status{font-size:12px;color:#9aa0a6}
+    main{padding:16px;max-width:1100px;margin:0 auto}
     canvas{display:block;margin:0 auto;width:min(96vw,1024px);aspect-ratio:4/3;background:#000;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.55);outline:none}
     .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
     button{padding:10px 14px;border-radius:999px;border:1px solid #333;background:#161616;color:#e7e7e7;font-weight:600;cursor:pointer}
     button:hover{background:#1f1f1f}
-    a.small{color:#9aa0a6;font-size:12px;text-decoration:none}
-    pre{white-space:pre-wrap;background:#111;padding:10px;border-radius:8px;color:#9aa0a6;max-width:960px;margin:12px auto}
+    .hint{color:#9aa0a6;font-size:12px;text-align:center;margin-top:8px}
+    pre{white-space:pre-wrap;background:#111;padding:10px;border-radius:8px;color:#9aa0a6;max-width:960px;margin:12px auto;overflow:auto}
   </style>
 </head>
 <body>
@@ -25,31 +26,91 @@
 
   <main>
     <canvas id="canvas" tabindex="0"></canvas>
+
     <div class="controls">
       <button id="startBtn">Start</button>
+      <button id="lockBtn">Lock Mouse</button>
+      <button id="unlockBtn">Unlock Mouse</button>
       <button id="fullscreenBtn">Fullscreen</button>
-      <a class="small">Click canvas → <kbd>WASD</kbd> + mouse. <kbd>Esc</kbd> unlocks pointer.</a>
     </div>
+
+    <div class="hint">
+      <strong>Controls:</strong> <kbd>W</kbd>/<kbd>S</kbd> = move, <kbd>A</kbd>/<kbd>D</kbd> = strafe, move mouse to turn,
+      <kbd>Left-Click</kbd> = fire, <kbd>Right-Click</kbd> = use/open, <kbd>Shift</kbd> = run, <kbd>Esc</kbd> releases mouse.
+    </div>
+
     <pre id="log" hidden></pre>
   </main>
 
   <script>
-    // === your hosted asset URLs on GitHub Pages ===
-    const BASE   = "https://jconstantine627752-maker.github.io/doom.fun/";
-    const JS_URL = BASE + "chocolate-doom.js";
-    const WASM_URL = BASE + "chocolate-doom.wasm";
-    const WAD_URL  = BASE + "doom1.wad";
+    // === Your hosted asset URLs on GitHub Pages ===
+    const BASE      = "https://jconstantine627752-maker.github.io/doom.fun/";
+    const JS_URL    = BASE + "chocolate-doom.js";
+    const WASM_URL  = BASE + "chocolate-doom.wasm";
+    const WAD_URL   = BASE + "doom1.wad";
+    const CFG_URL   = BASE + "chocolate-doom.cfg"; // modern controls cfg (WASD + mouse; right-click Use)
 
+    // UI helpers
     const statusEl = document.getElementById("status");
-    const logEl = document.getElementById("log");
-    const canvas = document.getElementById("canvas");
+    const logEl    = document.getElementById("log");
+    const canvas   = document.getElementById("canvas");
     const setStatus = (m)=>statusEl.textContent = m;
     const log = (m)=>{ console.log(m); logEl.hidden=false; logEl.textContent += m + "\n"; };
+
+    // Pointer lock helpers
+    const focusCanvasSoon = ()=> setTimeout(()=>canvas.focus(), 0);
+    const lockPointer   = ()=>{ try{ if (document.pointerLockElement!==canvas) canvas.requestPointerLock?.(); }catch(_){} };
+    const unlockPointer = ()=>{ try{ document.exitPointerLock?.(); }catch(_){} };
+    document.getElementById("lockBtn").onclick   = ()=>{ lockPointer(); focusCanvasSoon(); };
+    document.getElementById("unlockBtn").onclick = ()=>{ unlockPointer(); };
+
+    document.addEventListener("pointerlockchange", ()=>{
+      const locked = document.pointerLockElement === canvas;
+      setStatus(locked ? "Pointer locked — Esc to release" : "Pointer released");
+      if (locked) focusCanvasSoon();
+    });
+    canvas.addEventListener("mousedown", focusCanvasSoon);
+    canvas.addEventListener("click", lockPointer);
+
+    // Optional fullscreen (may be blocked by some hosts)
+    document.getElementById("fullscreenBtn").onclick = async ()=>{
+      try{ if (canvas.requestFullscreen) await canvas.requestFullscreen(); }catch(e){}
+      focusCanvasSoon();
+    };
+
+    // Prevent page from eating game keys
+    const GAME_KEYS = new Set([
+      "ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space","Tab",
+      "ShiftLeft","ShiftRight","ControlLeft","ControlRight","AltLeft","AltRight",
+      "KeyW","KeyA","KeyS","KeyD","KeyQ","KeyE","KeyR","KeyF",
+      "KeyZ","KeyX","KeyC","KeyV","Digit0","Digit1","Digit2","Digit3","Digit4","Digit5","Digit6","Digit7","Digit8","Digit9"
+    ]);
+    const block = (e)=>{ if (GAME_KEYS.has(e.code)) e.preventDefault(); };
+    window.addEventListener("keydown", block, {passive:false});
+    window.addEventListener("keyup",   block, {passive:false});
 
     async function start() {
       try {
         setStatus("Loading engine…");
-        // Load the Emscripten glue JS from GitHub Pages
+
+        // Configure Module FIRST (so non-modular builds see it)
+        window.Module = {
+          print:   (t)=>log(t),
+          printErr:(t)=>log("[err] " + t),
+          canvas,
+          setStatus,
+          preRun: [ () => {
+            // Preload WAD and our default controls config into the virtual FS
+            FS.createPreloadedFile("/", "doom1.wad",           WAD_URL, true, true);
+            FS.createPreloadedFile("/", "chocolate-doom.cfg",  CFG_URL, true, true);
+          }],
+          // Pass both -iwad and -config to prefer our cfg if the port supports it
+          arguments: ["-iwad","doom1.wad","-config","chocolate-doom.cfg"],
+          // Tell the glue where to fetch the .wasm
+          locateFile: (path) => path.endsWith(".wasm") ? WASM_URL : path
+        };
+
+        // Load the Emscripten glue JS
         await new Promise((resolve, reject) => {
           const s = document.createElement("script");
           s.src = JS_URL; s.async = true;
@@ -58,26 +119,25 @@
           document.head.appendChild(s);
         });
 
-        // Configure Emscripten Module to fetch assets via URLs (no base64)
-        window.Module = {
-          print: (t)=>log(t),
-          printErr: (t)=>log("[err] " + t),
-          canvas,
-          setStatus,
-          preRun: [ () => {
-            // Let Emscripten fetch doom1.wad by URL and mount it at /doom1.wad
-            FS.createPreloadedFile("/", "doom1.wad", WAD_URL, true, true);
-          }],
-          arguments: ["-iwad","doom1.wad"],
-          // When the glue looks for the .wasm file, point it to your hosted URL
-          locateFile: (path) => path.endsWith(".wasm") ? WASM_URL : path
-        };
-
         setStatus("Starting DOOM…");
-        if (typeof createModule !== "function") throw new Error("createModule() not found");
-        await createModule(Module);
-        setTimeout(()=>canvas.focus(), 0);
-        setStatus("Running");
+
+        // Support modular and non-modular Emscripten builds
+        if (typeof createModule === "function") {
+          await createModule(window.Module);
+        } else if (window.Module && window.Module.ready && typeof window.Module.ready.then === "function") {
+          await window.Module.ready;
+        } else if (window.Module) {
+          await new Promise((resolve) => {
+            if (window.Module.calledRun) return resolve();
+            const prev = window.Module.onRuntimeInitialized;
+            window.Module.onRuntimeInitialized = function(){ try{ prev && prev(); } finally { resolve(); } };
+          });
+        } else {
+          throw new Error("Emscripten Module not found after loading glue.");
+        }
+
+        focusCanvasSoon();
+        setStatus("Running — Esc to release pointer");
       } catch (err) {
         console.error(err);
         setStatus("Error: " + (err && err.message ? err.message : err));
@@ -86,8 +146,6 @@
     }
 
     document.getElementById("startBtn").onclick = start;
-    document.getElementById("fullscreenBtn").onclick = () => canvas.requestFullscreen?.();
   </script>
 </body>
 </html>
-
