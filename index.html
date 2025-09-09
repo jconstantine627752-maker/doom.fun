@@ -7,8 +7,7 @@
   <style>
     html,body{margin:0;height:100%;background:#0b0b0b;color:#e7e7e7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
     header{padding:14px 18px;border-bottom:1px solid #222;display:flex;gap:10px;align-items:center}
-    h1{font-size:18px;margin:0}
-    #status{font-size:12px;color:#9aa0a6}
+    h1{font-size:18px;margin:0} #status{font-size:12px;color:#9aa0a6}
     main{padding:16px}
     canvas{display:block;margin:0 auto;width:min(96vw,1024px);aspect-ratio:4/3;background:#000;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.55);outline:none}
     .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
@@ -36,15 +35,14 @@
 
   <script>
     // === your hosted asset URLs on GitHub Pages ===
-    const BASE     = "https://jconstantine627752-maker.github.io/doom.fun/";
-    const JS_URL   = BASE + "chocolate-doom.js";
+    const BASE   = "https://jconstantine627752-maker.github.io/doom.fun/";
+    const JS_URL = BASE + "chocolate-doom.js";
     const WASM_URL = BASE + "chocolate-doom.wasm";
     const WAD_URL  = BASE + "doom1.wad";
 
     const statusEl = document.getElementById("status");
-    const logEl    = document.getElementById("log");
-    const canvas   = document.getElementById("canvas");
-
+    const logEl = document.getElementById("log");
+    const canvas = document.getElementById("canvas");
     const setStatus = (m)=>statusEl.textContent = m;
     const log = (m)=>{ console.log(m); logEl.hidden=false; logEl.textContent += m + "\n"; };
 
@@ -67,9 +65,11 @@
           canvas,
           setStatus,
           preRun: [ () => {
+            // Let Emscripten fetch doom1.wad by URL and mount it at /doom1.wad
             FS.createPreloadedFile("/", "doom1.wad", WAD_URL, true, true);
           }],
           arguments: ["-iwad","doom1.wad"],
+          // When the glue looks for the .wasm file, point it to your hosted URL
           locateFile: (path) => path.endsWith(".wasm") ? WASM_URL : path
         };
 
