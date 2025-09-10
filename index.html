@@ -13,7 +13,7 @@
     .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
     button{padding:10px 14px;border-radius:999px;border:1px solid #333;background:#161616;color:#e7e7e7;font-weight:600;cursor:pointer}
     button:hover{background:#1f1f1f}
-    a.small{color:#9aa0a6;font-size:12px;text-decoration:none}
+    a.small{color:#9aa0a6;font-size:12px;text-decoration:none;max-width:960px}
     pre{white-space:pre-wrap;background:#111;padding:10px;border-radius:8px;color:#9aa0a6;max-width:960px;margin:12px auto}
   </style>
 </head>
@@ -28,7 +28,7 @@
     <div class="controls">
       <button id="startBtn">Start</button>
       <button id="fullscreenBtn">Fullscreen</button>
-      <a class="small">Click canvas → <kbd>WASD</kbd> + mouse. <kbd>Esc</kbd> unlocks pointer.</a>
+      <a class="small">Original 1993 controls, arrow keys to move forward and back, hold right mouse button to strafe left and right, left click to shoot, single right mouse click to interact, hold scroll wheel to run, numbers on top to switch weapons. Happy Hunting!</a>
     </div>
     <pre id="log" hidden></pre>
   </main>
@@ -65,11 +65,10 @@
           canvas,
           setStatus,
           preRun: [ () => {
-            // Let Emscripten fetch doom1.wad by URL and mount it at /doom1.wad
+            // Mount doom1.wad at /doom1.wad
             FS.createPreloadedFile("/", "doom1.wad", WAD_URL, true, true);
           }],
           arguments: ["-iwad","doom1.wad"],
-          // When the glue looks for the .wasm file, point it to your hosted URL
           locateFile: (path) => path.endsWith(".wasm") ? WASM_URL : path
         };
 
